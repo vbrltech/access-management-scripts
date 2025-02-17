@@ -35,17 +35,17 @@ for org in $orgs; do
     
     for user in "$@"; do
         # Check if user is a member and their role
-        member_info=$(gh api "/orgs/$org/memberships/$user" --silent || echo "No membership")
+        member_info=$(gh api "/orgs/$org/memberships/$user" 2>&1 || echo "No membership")
         
         if [[ "$member_info" == *"You must be a member"* ]] || [[ "$member_info" == *"Must have admin rights"* ]]; then
             echo "- $user: ⚠️ Need manager check" >> "$REPORT_FILE"
             need_manager_check=true
-        elif [ "$member_info" != "No membership" ]; then
+        elif [[ "$member_info" == *"Not Found"* ]]; then
+            echo "- $user: No membership" >> "$REPORT_FILE"
+        else
             role=$(echo "$member_info" | jq -r '.role' 2>/dev/null || echo "unknown")
             state=$(echo "$member_info" | jq -r '.state' 2>/dev/null || echo "unknown")
             echo "- $user: $role (Status: $state)" >> "$REPORT_FILE"
-        else
-            echo "- $user: No membership" >> "$REPORT_FILE"
         fi
     done
 
@@ -75,12 +75,12 @@ for org in $orgs; do
         
         # Check collaborators
         for user in "$@"; do
-            response=$(gh api "/repos/$org/$repo/collaborators/$user" --silent || echo "No access")
+            response=$(gh api "/repos/$org/$repo/collaborators/$user" 2>&1 || echo "No access")
             if [[ "$response" == *"Must have push access"* ]]; then
                 echo "- $user: ⚠️ Need manager check" >> "$REPORT_FILE"
                 repo_needs_check=true
                 org_needs_check=true
-            elif [ "$response" == "No access" ]; then
+            elif [[ "$response" == *"Not Found"* ]]; then
                 echo "- $user: No access" >> "$REPORT_FILE"
             else
                 permission=$(echo "$response" | jq -r '.permissions' 2>/dev/null || echo "unknown")
@@ -102,6 +102,10 @@ for org in $orgs; do
         echo "" >> "$NEED_MANAGER_FILE"
     fi
 done
+
+# Add summary section
+echo -e "\n## Summary\n" >> "$REPORT_FILE"
+echo "Organizations and repositories that need manager verification are listed in: $NEED_MANAGER_FILE" >> "$REPORT_FILE"
 
 echo -e "\nReports generated:"
 echo "1. Full access report: $REPORT_FILE"
