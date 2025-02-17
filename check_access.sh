@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to check repository access and organization membership for specific GitHub users
+# Script to check repository access for specific GitHub users
 # Usage: ./check_access.sh username1 [username2 ...]
 
 if [ $# -eq 0 ]; then
@@ -12,12 +12,17 @@ fi
 # Create output directory for reports
 mkdir -p reports
 REPORT_FILE="reports/access_report_$(date +%Y%m%d_%H%M%S).md"
+NEED_MANAGER_FILE="reports/need_manager_check_$(date +%Y%m%d_%H%M%S).md"
 
 echo "# GitHub Access Report - $(date)" > "$REPORT_FILE"
 echo "## Users Checked:" >> "$REPORT_FILE"
 for user in "$@"; do
     echo "- $user" >> "$REPORT_FILE"
 done
+
+echo "# Repositories Needing Manager Check - $(date)" > "$NEED_MANAGER_FILE"
+echo "The following repositories/organizations need manager access to verify:" >> "$NEED_MANAGER_FILE"
+echo "" >> "$NEED_MANAGER_FILE"
 
 # First check organization memberships
 echo -e "\n## Organization Memberships\n" >> "$REPORT_FILE"
@@ -51,21 +56,33 @@ for org in $orgs; do
     # Get repositories for organization
     repos=$(gh api "/orgs/$org/repos" --jq '.[].name')
     
+    need_manager_check=false
     for repo in $repos; do
         echo "Checking $org/$repo..."
         echo -e "\n#### $repo" >> "$REPORT_FILE"
         
         # Check collaborators
         for user in "$@"; do
-            access=$(gh api "/repos/$org/$repo/collaborators/$user" --silent || echo "No access")
-            if [ "$access" != "No access" ]; then
-                permission=$(gh api "/repos/$org/$repo/collaborators/$user" --jq '.permissions')
-                echo "- $user: Has access ($permission)" >> "$REPORT_FILE"
-            else
+            response=$(gh api "/repos/$org/$repo/collaborators/$user" --silent || echo "No access")
+            if [ "$response" == "No access" ]; then
                 echo "- $user: No access" >> "$REPORT_FILE"
+            elif [[ "$response" == *"Must have push access to view repository collaborators"* ]]; then
+                echo "- $user: ⚠️ Need manager check" >> "$REPORT_FILE"
+                need_manager_check=true
+            else
+                permission=$(echo "$response" | gh api --jq '.permissions' 2>/dev/null || echo "unknown")
+                echo "- $user: Has access ($permission)" >> "$REPORT_FILE"
             fi
         done
     done
+    
+    if [ "$need_manager_check" = true ]; then
+        echo "## $org" >> "$NEED_MANAGER_FILE"
+        echo "Please check all repositories in this organization." >> "$NEED_MANAGER_FILE"
+        echo "" >> "$NEED_MANAGER_FILE"
+    fi
 done
 
-echo -e "\nReport generated: $REPORT_FILE"
+echo -e "\nReports generated:"
+echo "1. Full access report: $REPORT_FILE"
+echo "2. Repositories needing manager check: $NEED_MANAGER_FILE"

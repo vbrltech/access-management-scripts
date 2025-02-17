@@ -18,11 +18,15 @@ chmod +x check_access.sh
 ./check_access.sh udi256 udi256Daniil
 ```
 
-The script will:
-- Generate a detailed report in the `reports` directory
-- Check organization memberships and roles
-- Show which repositories each user has access to
-- Include permission levels for each access found
+The script will generate two reports:
+1. Full access report (`reports/access_report_*.md`):
+   - Organization memberships and roles
+   - Repository access permissions
+   - Complete access status for each user
+
+2. Manager check report (`reports/need_manager_check_*.md`):
+   - List of repositories/organizations that need manager access to verify
+   - Cases where current user lacks permission to check access
 
 ### 2. remove_access.sh
 Removes both organization memberships and repository access for specified GitHub users across all organizations you have access to.
@@ -38,15 +42,16 @@ chmod +x remove_access.sh
 ./remove_access.sh udi256 udi256Daniil
 ```
 
-The script will:
-- Remove organization memberships for specified users
-- Remove repository access for specified users
-- Generate a detailed log in the `logs` directory
-- Show successful and failed removal attempts
-- Provide a summary of:
-  - Organization membership removals
-  - Repository access removals
-  - Total removals
+The script will generate two reports:
+1. Removal log (`logs/removal_log_*.md`):
+   - Detailed log of all removal actions
+   - Success/failure status for each action
+   - Summary of total removals
+
+2. Manager actions needed (`logs/need_manager_removal_*.md`):
+   - List of removals that need manager access
+   - Organizations and repositories requiring elevated permissions
+   - Clear instructions for managers
 
 ## Prerequisites
 
@@ -54,16 +59,23 @@ The script will:
 2. You must have appropriate permissions in the organizations to:
    - View and modify organization memberships
    - View and modify repository access
+3. For repositories/organizations where you lack permission, a manager will need to perform the actions
 
 ## Output Files
 
-- Reports are saved in the `reports` directory with timestamp
-- Removal logs are saved in the `logs` directory with timestamp
+### Reports Directory
+- Access check reports with timestamp
+- List of repositories needing manager verification
+
+### Logs Directory
+- Removal action logs with timestamp
+- List of removals needing manager action
 
 ## Security Note
 
-Please ensure you have proper authorization before removing anyone's access. It's recommended to:
-1. Run `check_access.sh` first to review current access and memberships
-2. Review the report carefully
+Please ensure you have proper authorization before removing anyone's access. Recommended workflow:
+1. Run `check_access.sh` first to review current access
+2. Review the generated reports carefully
 3. Get necessary approvals before running `remove_access.sh`
-4. Keep the generated logs for audit purposes
+4. Forward the manager action report to appropriate personnel
+5. Keep all logs for audit purposes
