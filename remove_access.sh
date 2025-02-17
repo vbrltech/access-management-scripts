@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to remove repository access for specific GitHub users
+# Script to remove repository access and organization membership for specific GitHub users
 # Usage: ./remove_access.sh username1 [username2 ...]
 
 if [ $# -eq 0 ]; then
@@ -18,14 +18,38 @@ echo "## Users Processed:" >> "$LOG_FILE"
 for user in "$@"; do
     echo "- $user" >> "$LOG_FILE"
 done
-echo -e "\n## Removal Actions\n" >> "$LOG_FILE"
 
-# Get list of organizations
-echo "Fetching organizations..."
+# First handle organization memberships
+echo -e "\n## Organization Membership Removals\n" >> "$LOG_FILE"
+
 orgs=$(gh api user/memberships/orgs --jq '.[].organization.login')
+org_removals=0
 
-# Counter for removed access
-total_removed=0
+for org in $orgs; do
+    echo "### $org" >> "$LOG_FILE"
+    
+    for user in "$@"; do
+        # Check if user is a member
+        member_info=$(gh api "/orgs/$org/memberships/$user" --silent || echo "No membership")
+        
+        if [ "$member_info" != "No membership" ]; then
+            echo "Removing $user from organization $org..."
+            if gh api -X DELETE "/orgs/$org/memberships/$user" --silent; then
+                echo "- ✓ Removed $user from organization" >> "$LOG_FILE"
+                ((org_removals++))
+            else
+                echo "- ❌ Failed to remove $user from organization" >> "$LOG_FILE"
+            fi
+        else
+            echo "- $user: No membership found" >> "$LOG_FILE"
+        fi
+    done
+done
+
+# Then handle repository access
+echo -e "\n## Repository Access Removals\n" >> "$LOG_FILE"
+
+repo_removals=0
 
 for org in $orgs; do
     echo "### Organization: $org" >> "$LOG_FILE"
@@ -45,7 +69,7 @@ for org in $orgs; do
                 echo "Removing $user from $org/$repo..."
                 if gh api -X DELETE "/repos/$org/$repo/collaborators/$user" --silent; then
                     echo "- ✓ Removed $user" >> "$LOG_FILE"
-                    ((total_removed++))
+                    ((repo_removals++))
                 else
                     echo "- ❌ Failed to remove $user" >> "$LOG_FILE"
                 fi
@@ -57,5 +81,7 @@ for org in $orgs; do
 done
 
 echo -e "\n## Summary" >> "$LOG_FILE"
-echo "Total access removals: $total_removed" >> "$LOG_FILE"
+echo "Organization membership removals: $org_removals" >> "$LOG_FILE"
+echo "Repository access removals: $repo_removals" >> "$LOG_FILE"
+echo "Total removals: $((org_removals + repo_removals))" >> "$LOG_FILE"
 echo -e "\nLog file generated: $LOG_FILE"

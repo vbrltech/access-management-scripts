@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to check repository access for specific GitHub users
+# Script to check repository access and organization membership for specific GitHub users
 # Usage: ./check_access.sh username1 [username2 ...]
 
 if [ $# -eq 0 ]; then
@@ -18,11 +18,31 @@ echo "## Users Checked:" >> "$REPORT_FILE"
 for user in "$@"; do
     echo "- $user" >> "$REPORT_FILE"
 done
-echo -e "\n## Repository Access Details\n" >> "$REPORT_FILE"
 
-# Get list of organizations
-echo "Fetching organizations..."
+# First check organization memberships
+echo -e "\n## Organization Memberships\n" >> "$REPORT_FILE"
+
 orgs=$(gh api user/memberships/orgs --jq '.[].organization.login')
+
+for org in $orgs; do
+    echo "### $org" >> "$REPORT_FILE"
+    
+    for user in "$@"; do
+        # Check if user is a member and their role
+        member_info=$(gh api "/orgs/$org/memberships/$user" --silent || echo "No membership")
+        
+        if [ "$member_info" != "No membership" ]; then
+            role=$(echo "$member_info" | gh api --jq '.role' 2>/dev/null || echo "unknown")
+            state=$(echo "$member_info" | gh api --jq '.state' 2>/dev/null || echo "unknown")
+            echo "- $user: $role (Status: $state)" >> "$REPORT_FILE"
+        else
+            echo "- $user: No membership" >> "$REPORT_FILE"
+        fi
+    done
+done
+
+# Then check repository access
+echo -e "\n## Repository Access Details\n" >> "$REPORT_FILE"
 
 for org in $orgs; do
     echo "### Organization: $org" >> "$REPORT_FILE"
